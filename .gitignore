@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.db
+cloudflared.exe
+tunnel_url.txt
+.env
+.venv/
+venv/
+ENV/
+
