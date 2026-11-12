@@ -631,6 +631,20 @@ def page(name, active, title, **ctx):
 
 # ---------- routes ----------
 
+@app.errorhandler(404)
+def debug_404(e):
+    import json
+    info = {
+        "path": request.path,
+        "url": request.url,
+        "PATH_INFO": request.environ.get("PATH_INFO"),
+        "RAW_URI": request.environ.get("RAW_URI"),
+        "REQUEST_URI": request.environ.get("REQUEST_URI"),
+        "headers": dict(request.headers),
+    }
+    return Response(json.dumps(info, indent=2), mimetype="application/json", status=404)
+
+
 @app.route("/favicon.ico")
 def favicon():
     return Response(FAVICON_SVG, mimetype="image/svg+xml")
