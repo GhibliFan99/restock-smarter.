@@ -631,6 +631,22 @@ def page(name, active, title, **ctx):
 
 # ---------- routes ----------
 
+@app.errorhandler(404)
+def handle_404(e):
+    # If running behind Vercel rewrite where PATH_INFO got stripped or prefixed
+    path = request.path
+    if path.startswith("/api/index.py"):
+        target = path[len("/api/index.py"):] or "/"
+        return redirect(target)
+    if path.startswith("/api/index"):
+        target = path[len("/api/index"):] or "/"
+        return redirect(target)
+    if path.startswith("/api"):
+        target = path[len("/api"):] or "/"
+        return redirect(target)
+    return f"404 Not Found: path={request.path}, PATH_INFO={request.environ.get('PATH_INFO')}", 404
+
+
 @app.route("/favicon.ico")
 def favicon():
     return Response(FAVICON_SVG, mimetype="image/svg+xml")
