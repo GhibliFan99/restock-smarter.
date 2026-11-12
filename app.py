@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime
 
 import requests
+from urllib.parse import parse_qs, urlencode
 from flask import (
     Response, abort, flash, g, get_flashed_messages, redirect,
     render_template_string, request, url_for, Flask,
@@ -15,6 +16,29 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+class VercelPathMiddleware:
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        qs = parse_qs(environ.get('QUERY_STRING', ''), keep_blank_values=True)
+        if '__path' in qs:
+            raw = qs.pop('__path')[0]
+            environ['QUERY_STRING'] = urlencode([(k, v) for k, vs in qs.items() for v in vs])
+            environ['PATH_INFO'] = '/' + raw.lstrip('/')
+        else:
+            path = environ.get('PATH_INFO', '')
+            for prefix in ('/api/index.py', '/api/index', '/api'):
+                if path.startswith(prefix):
+                    remainder = path[len(prefix):]
+                    environ['PATH_INFO'] = '/' + remainder.lstrip('/')
+                    break
+        if not environ.get('PATH_INFO'):
+            environ['PATH_INFO'] = '/'
+        return self.wsgi_app(environ, start_response)
+
+app.wsgi_app = VercelPathMiddleware(app.wsgi_app)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-me")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -630,20 +654,6 @@ def page(name, active, title, **ctx):
 
 
 # ---------- routes ----------
-
-@app.errorhandler(404)
-def debug_404(e):
-    import json
-    info = {
-        "path": request.path,
-        "url": request.url,
-        "PATH_INFO": request.environ.get("PATH_INFO"),
-        "RAW_URI": request.environ.get("RAW_URI"),
-        "REQUEST_URI": request.environ.get("REQUEST_URI"),
-        "headers": dict(request.headers),
-    }
-    return Response(json.dumps(info, indent=2), mimetype="application/json", status=404)
-
 
 @app.route("/favicon.ico")
 def favicon():
