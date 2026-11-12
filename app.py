@@ -18,7 +18,10 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-me")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.environ.get("DB_PATH", os.path.join(BASE_DIR, "restocksmarter.db"))
+if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    DB_PATH = os.environ.get("DB_PATH", "/tmp/restocksmarter.db")
+else:
+    DB_PATH = os.environ.get("DB_PATH", os.path.join(BASE_DIR, "restocksmarter.db"))
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 AI_MODEL = os.environ.get("AI_MODEL", "claude-3-5-haiku-latest")
 CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "gracey.senica@gmail.com")
@@ -423,8 +426,13 @@ TEMPLATES = {
 # ---------- database helpers ----------
 
 def get_db():
+    global DB_PATH
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH, timeout=10)
+        try:
+            g.db = sqlite3.connect(DB_PATH, timeout=10)
+        except (sqlite3.OperationalError, sqlite3.DatabaseError):
+            DB_PATH = "/tmp/restocksmarter.db"
+            g.db = sqlite3.connect(DB_PATH, timeout=10)
         g.db.row_factory = sqlite3.Row
     return g.db
 
@@ -437,9 +445,16 @@ def close_db(_exc):
 
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    conn.executescript(SCHEMA)
-    conn.close()
+    global DB_PATH
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        conn.executescript(SCHEMA)
+        conn.close()
+    except (sqlite3.OperationalError, sqlite3.DatabaseError):
+        DB_PATH = "/tmp/restocksmarter.db"
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        conn.executescript(SCHEMA)
+        conn.close()
 
 
 init_db()
